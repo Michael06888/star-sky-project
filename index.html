@@ -535,23 +535,55 @@ const eventTitle = document.getElementById('eventTitle');
 const eventDesc = document.getElementById('eventDesc');
 const eventChoices = document.getElementById('eventChoices');
 
-function triggerCosmicEvent(evt){
+ 
+function triggerCosmicEvent(evt)
+{
   eventTitle.innerText = evt.cn;
   eventDesc.innerText = evt.desc;
   eventChoices.innerHTML = "";
+  let hasSelected = false;
+  const optionBtns = [];
+
   evt.choices.forEach(ch=>{
     const btn = document.createElement("button");
     btn.innerText = ch.text;
+    optionBtns.push(btn);
+
     btn.onclick = ()=>{
+      // 第一行就判断，一旦选过直接返回，不执行任何逻辑
+      if (hasSelected) return;
+
+      hasSelected = true;
       applyEffect(ch.effect);
-      eventModal.classList.remove("open");
       gameState.eventCooldown = 8000;
-    }
+
+      // 锁住所有选项按钮
+      optionBtns.forEach(b => {
+        b.disabled = true;
+        b.style.pointerEvents = "none";
+        b.onclick = null;
+      });
+    };
+
     eventChoices.appendChild(btn);
-  })
+  });
+
+  // 关闭按钮，不受锁定影响
+  const closeBtn = document.createElement("button");
+  closeBtn.innerText = "关闭";
+  closeBtn.style.marginTop = "12px";
+  closeBtn.style.padding = "10px 16px";
+  closeBtn.style.width = "100%";
+  closeBtn.style.backgroundColor = "#444870";
+  closeBtn.style.color = "#fff";
+  closeBtn.onclick = ()=>{
+    eventModal.classList.remove("open");
+  };
+  eventChoices.appendChild(closeBtn);
+
   eventModal.classList.add("open");
 }
-
+ 
 function applyEffect(eff){
   if(eff.hide !== undefined) gameState.hideBoost = eff.hide;
   if(eff.scan !== undefined) gameState.scanActive = eff.scan;
