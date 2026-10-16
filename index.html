@@ -14,6 +14,43 @@
     touch-action: none;
     font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
   }
+
+  #loadingScreen{
+    position:fixed;
+    inset:0;
+    background:#02030a;
+    z-index:99;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    justify-content:center;
+    transition: opacity 0.8s ease;
+  }
+  #loadingScreen.fadeout{
+    opacity:0;
+    pointer-events:none;
+  }
+  .load-title{
+    color:#ffe190;
+    font-size:22px;
+    letter-spacing:3px;
+    margin-bottom:32px;
+  }
+  .progress-wrap{
+    width:280px;
+    height:6px;
+    background:rgba(255,255,255,0.12);
+    border-radius:99px;
+    overflow:hidden;
+  }
+  #progressBar{
+    height:100%;
+    width:0%;
+    background:linear-gradient(90deg,#ffe190,#ffc470);
+    border-radius:99px;
+    transition: width 0.08s linear;
+  }
+
   canvas {
     display: block;
     width: 100%;
@@ -51,11 +88,9 @@
     transform: translateX(-50%) translateY(0);
   }
 
-  /* 弹窗通用 */
   .modal{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;padding:16px;z-index:20;}
   .modal.open{display:flex;}
   .panel{width:100%;max-width:420px;background:#0b0f1c;border-radius:18px;padding:20px;color:#fff;border:1px solid rgba(255,255,255,0.15);}
-  /* 哲理双语弹窗 */
   #quoteModal .panel{
     background: radial-gradient(circle at center, #101428 0%, #02030a 100%);
     padding:28px 24px;
@@ -64,7 +99,25 @@
   .quote-en{font-size:14px;line-height:1.6;color:#cde0ff;text-align:center;}
   .quote-close{margin-top:20px;width:100%;padding:10px;border-radius:10px;border:none;font-size:14px;background:#5886ff;color:#fff;cursor:pointer;}
 
-  /* 留言面板 */
+  #eventModal .panel{
+    background: radial-gradient(circle at center, #101428 0%, #02030a 100%);
+    max-width:440px;
+  }
+  #eventChoices button{
+    width:100%;
+    padding:12px;
+    margin:6px 0;
+    border-radius:10px;
+    border:none;
+    background:#253b70;
+    color:#fff;
+    font-size:15px;
+    cursor:pointer;
+  }
+  #eventChoices button:hover{
+    background:#4068bb;
+  }
+
   .msg-panel{
     position:fixed;
     top:50%;
@@ -107,7 +160,6 @@
   }
   .submit{background:#4285f4;color:white;}
   .close{background:#444;color:white;}
-  /* 星星上的留言文字 */
   .star-note{
     position:absolute;
     color:#ffffff;
@@ -116,14 +168,33 @@
     white-space:nowrap;
     transform:translate(-50%, -180%);
   }
+  .gold-panel{
+    position:fixed;
+    top:16px;
+    left:16px;
+    background:rgba(0,0,0,0.72);
+    padding:12px 16px;
+    border-radius:12px;
+    color:#ffe190;
+    font-size:16px;
+    z-index:15;
+    border:1px solid rgba(255,225,140,0.25);
+  }
 </style>
 </head>
 <body>
+<div id="loadingScreen">
+  <div class="load-title">Name a star for your beloved</div>
+  <div class="progress-wrap">
+    <div id="progressBar"></div>
+  </div>
+</div>
+
 <canvas id="sky"></canvas>
 <div class="tip">拖拽旋转宇宙 · 双指缩放切换区域 · 点击星星阅读句子</div>
 <div class="area-toast" id="areaToast"></div>
+<div class="gold-panel">💰 金币：<span id="goldText">300</span></div>
 
-<!-- 双语哲理句子弹窗 -->
 <div class="modal" id="quoteModal">
 <div class="panel">
   <div class="quote-cn" id="quoteCN"></div>
@@ -132,7 +203,14 @@
 </div>
 </div>
 
-<!-- 留言弹窗 -->
+<div class="modal" id="eventModal">
+<div class="panel">
+  <div style="color:#ffe190;font-size:20px;margin-bottom:12px;text-align:center" id="eventTitle"></div>
+  <div style="font-size:15px;line-height:1.7;margin-bottom:20px;color:#eee;white-space:pre-line" id="eventDesc"></div>
+  <div id="eventChoices"></div>
+</div>
+</div>
+
 <div class="msg-panel" id="msgBox">
   <h3>给这颗星星留言</h3>
   <textarea id="msgInput" placeholder="写下你的留言..."></textarea>
@@ -143,7 +221,6 @@
 </div>
 
 <script>
-// ====================== 80条中英双语哲理句子池 ======================
 const quoteList = [
 {"cn":"万物皆有裂痕，那是光照进来的地方。","en":"There is a crack in everything, that's how the light gets in."},
 {"cn":"生活不是等待风暴过去，而是学会在雨中起舞。","en":"Life isn't about waiting for the storm to pass, it's about learning to dance in the rain."},
@@ -227,23 +304,27 @@ const quoteList = [
 {"cn":"生活的力量，藏在平静之中。","en":"The power of life lies in stillness."}
 ];
 
-// 哲理弹窗DOM
 const quoteModal = document.getElementById('quoteModal');
 const quoteCN = document.getElementById('quoteCN');
 const quoteEN = document.getElementById('quoteEN');
 const quoteCloseBtn = document.getElementById('quoteCloseBtn');
 
-// 留言面板DOM
 const msgBox = document.getElementById('msgBox');
 const msgInput = document.getElementById('msgInput');
 const submitBtn = document.getElementById('submitBtn');
 const closeBtn = document.getElementById('closeBtn');
+const goldTextEl = document.getElementById("goldText");
 
-// 存储
 const STORAGE_KEY = "starMessages";
 let selectedStar = null;
 
-// XSS转义
+let gold = 300;
+let hasTriggeredGrandPrize = false;
+
+function updateGoldUI(){
+  goldTextEl.innerText = gold;
+}
+
 function escapeHtml(str) {
   return String(str)
     .replaceAll("&", "&amp;")
@@ -261,30 +342,50 @@ function saveNotes(list){
 }
 window.clearAllNotes = function(){
   localStorage.removeItem(STORAGE_KEY);
-  stars.forEach(s=>{
-    if(s.noteDom) s.noteDom.remove();
-    s.noteText = "";
-    s.noteDom = null;
-  })
+  if (typeof stars !== 'undefined') {
+    stars.forEach(s=>{
+      if(s.noteDom) s.noteDom.remove();
+      s.noteText = "";
+      s.noteDom = null;
+    });
+  }
 }
 
-// 关闭留言弹窗
 closeBtn.onclick = ()=>{
   msgBox.style.display = 'none';
   msgInput.value = '';
   selectedStar = null;
 }
-// 提交留言
+
 submitBtn.onclick = ()=>{
   const txt = msgInput.value.trim();
   if(!txt || !selectedStar) return;
+
+  let cost = 0;
+  if(selectedStar.isBlueGiant){
+    cost = 218;
+  }else if(selectedStar.isSandGiant){
+    cost = 5688;
+  }else if(selectedStar.isRedGiant){
+    cost = 22000;
+  }else{
+    cost = 28 + Math.floor(Math.random() * (140 - 28 + 1));
+  }
+
+  if(gold < cost){
+    showAreaToast(`金币不足！需要${cost}金币`);
+    return;
+  }
+  gold -= cost;
+  updateGoldUI();
+
   const safeText = escapeHtml(txt);
   selectedStar.noteText = safeText;
   selectedStar.noteDom = document.createElement('div');
   selectedStar.noteDom.className = 'star-note';
   selectedStar.noteDom.innerText = safeText;
   document.body.appendChild(selectedStar.noteDom);
-  // 保存本地
+
   const saved = loadSavedNotes();
   saved.push({
     starId: selectedStar.id,
@@ -295,20 +396,222 @@ submitBtn.onclick = ()=>{
   msgBox.style.display = 'none';
   msgInput.value = '';
   selectedStar = null;
+  showAreaToast(`留言成功，消耗${cost}金币`);
 }
 
-// 点击星星：弹出哲理句子，关闭后打开留言框
 quoteCloseBtn.onclick = () => {
   quoteModal.classList.remove('open');
-  // 打开留言面板
   msgBox.style.display = "block";
 };
 
-// ===================== 原版 3D分区宇宙代码 =====================
+const COSMIC_EVENTS = [
+  {
+    id:"star_eclipse",
+    name:"虚星掩蔽",
+    cn:"虚星掩蔽",
+    en:"Occultation of Void Star",
+    desc:"遥远暗恒星掠过观测视野，星光被吞噬。深空探测短暂失效，隐匿效果大幅提升。\n你要怎么做？",
+    choices:[
+      {text:"趁黑暗搜寻信号", effect:{scan:true, hide:false}},
+      {text:"关闭雷达，静默隐藏", effect:{scan:false, hide:true}}
+    ]
+  },
+  {
+    id:"grav_wave",
+    name:"引力波潮",
+    cn:"引力波潮",
+    en:"Gravitational Wave Surge",
+    desc:"黑洞合并产生的引力波扫过星域，导航紊乱，但引力波携带远古文明碎片。\n解析信号会暴露你的坐标。",
+    choices:[
+      {text:"解析引力波，破译古文明信息", effect:{ancientInfo:true, leakSignal:true}},
+      {text:"切断接收，规避导航损毁", effect:{ancientInfo:false, leakSignal:false}}
+    ]
+  },
+  {
+    id:"probe_messenger",
+    name:"漂流信使探测器",
+    cn:"漂流信使探测器",
+    en:"Drifting Messenger Probe",
+    desc:"捕获无人驾驶探测器，附带陌生文明和平邀约。回复通讯会暴露星域坐标。",
+    choices:[
+      {text:"回复信息，尝试文明交流", effect:{techGain:true, expose:true}},
+      {text:"捕获拆解，提取技术", effect:{techGain:0.5, expose:false}},
+      {text:"直接摧毁探测器", effect:{techGain:false, expose:false}}
+    ]
+  },
+  {
+    id:"dust_storm",
+    name:"星际尘埃风暴",
+    cn:"星际尘埃风暴",
+    en:"Interstellar Dust Storm",
+    desc:"致密分子云席卷这片星域，能见度暴跌，星光衰减，适合隐匿。",
+    choices:[
+      {text:"停留在尘埃中隐匿", effect:{dustStorm:true}},
+      {text:"加速离开这片分子云", effect:{dustStorm:false}}
+    ]
+  },
+  {
+    id:"entropy_warn",
+    name:"熵增预警",
+    cn:"熵增预警",
+    en:"Entropy Warning",
+    desc:"全域信号传来：本宇宙热寂进程比测算更快。一切文明终将归于沉寂。",
+    choices:[
+      {text:"全力扩张，掠夺资源", effect:{expand:true}},
+      {text:"投入算力寻找逆转熵的办法", effect:{research:true}}
+    ]
+  },
+  {
+    id:"ancient_beacon",
+    name:"远古信标",
+    cn:"远古信标",
+    en:"Ancient Beacon",
+    desc:"深空信标突然激活，释放出未知文明的能源波动。\n靠近调查可能获得奖励，也可能触发警戒。",
+    choices:[
+      {text:"靠近调查信标", effect:{ancientInfo:true, risk:true}},
+      {text:"保持距离，记录信号", effect:{ancientInfo:0.5, risk:false}}
+    ]
+  },
+  {
+    id:"wormhole",
+    name:"不稳定虫洞",
+    cn:"不稳定虫洞",
+    en:"Unstable Wormhole",
+    desc:"前方出现不稳定虫洞，穿越可能跃迁至富矿星域，也可能被抛入虚空。",
+    choices:[
+      {text:"穿越虫洞", effect:{teleport:true, risk:true}},
+      {text:"绕行避开", effect:{teleport:false, risk:false}}
+    ]
+  },
+  {
+    id:"pirate_fleet",
+    name:"星际海盗舰队",
+    cn:"星际海盗舰队",
+    en:"Pirate Fleet",
+    desc:"一支海盗舰队正在附近活动，他们要求支付通行费。",
+    choices:[
+      {text:"支付通行费换取安全", effect:{payToll:true}},
+      {text:"拒绝并加速逃离", effect:{flee:true}}
+    ]
+  },
+  {
+    id:"derelict_ship",
+    name:"遗弃飞船",
+    cn:"遗弃飞船",
+    en:"Derelict Ship",
+    desc:"发现一艘漂浮的遗弃飞船，舱内可能有补给，也可能有危险。",
+    choices:[
+      {text:"登船搜寻补给", effect:{loot:true}},
+      {text:"保持警戒，远程扫描", effect:{scan:true}}
+    ]
+  },
+  {
+    id:"solar_storm",
+    name:"太阳风暴",
+    cn:"太阳风暴",
+    en:"Solar Storm",
+    desc:"附近恒星爆发强烈太阳风暴，电子设备可能受损。",
+    choices:[
+      {text:"启动护盾抵御", effect:{shield:true}},
+      {text:"关闭系统等待风暴过去", effect:{shutDown:true}}
+    ]
+  }
+];
+
+const gameState = {
+  hideBoost: false,
+  scanActive: false,
+  dustStorm: false,
+  signalLeak: false,
+  ancientFragments: 0,
+  techLevel: 0,
+  stayTimer: 0,
+  lastEventArea: -1,
+  eventCooldown: 0
+};
+
+const eventModal = document.getElementById('eventModal');
+const eventTitle = document.getElementById('eventTitle');
+const eventDesc = document.getElementById('eventDesc');
+const eventChoices = document.getElementById('eventChoices');
+
+function triggerCosmicEvent(evt){
+  eventTitle.innerText = evt.cn;
+  eventDesc.innerText = evt.desc;
+  eventChoices.innerHTML = "";
+  evt.choices.forEach(ch=>{
+    const btn = document.createElement("button");
+    btn.innerText = ch.text;
+    btn.onclick = ()=>{
+      applyEffect(ch.effect);
+      eventModal.classList.remove("open");
+      gameState.eventCooldown = 8000;
+    }
+    eventChoices.appendChild(btn);
+  })
+  eventModal.classList.add("open");
+}
+
+function applyEffect(eff){
+  if(eff.hide !== undefined) gameState.hideBoost = eff.hide;
+  if(eff.scan !== undefined) gameState.scanActive = eff.scan;
+  if(eff.dustStorm !== undefined) gameState.dustStorm = eff.dustStorm;
+  if(eff.leakSignal) gameState.signalLeak = true;
+  if(eff.ancientInfo) gameState.ancientFragments += 1;
+  if(eff.techGain) gameState.techLevel += eff.techGain;
+  if(eff.expand){
+    stars.forEach(s=>{
+      s.flow.x *=1.1;
+      s.flow.y *=1.1;
+      s.flow.z *=1.1;
+    })
+  }
+  if(eff.research){
+    stars.forEach(s=> s.twinkleSpeed *=0.85);
+  }
+
+  const rnd = Math.random() * 100;
+  let goldDelta;
+  if(rnd < 3){
+    goldDelta = 10000;
+    hasTriggeredGrandPrize = true;
+    showAreaToast(`🎉大奖！获得10000金币！`);
+  }else if(rnd < 4 && hasTriggeredGrandPrize){
+    goldDelta = -7000;
+    showAreaToast(`⚠️灾难！损失7000金币！`);
+  }else{
+    goldDelta = Math.floor(Math.random() * (90 + 70 + 1)) - 70;
+  }
+  gold += goldDelta;
+  if(gold < 0) gold = 0;
+  updateGoldUI();
+  if(rnd >= 4) showAreaToast(`事件已生效，金币变动 ${goldDelta}`);
+}
+
+function updateCosmicEvents(dt, areaId){
+  if(gameState.eventCooldown > 0){
+    gameState.eventCooldown -= dt;
+    return;
+  }
+  if(gameState.lastEventArea !== areaId){
+    gameState.stayTimer = 0;
+    gameState.lastEventArea = areaId;
+  }
+  gameState.stayTimer += dt;
+
+  if(gameState.stayTimer > 8000 && Math.random() < 0.0008){
+    const randomEvt = COSMIC_EVENTS[Math.floor(Math.random() * COSMIC_EVENTS.length)];
+    triggerCosmicEvent(randomEvt);
+    gameState.stayTimer = 0;
+  }
+}
+
 (() => {
   const canvas = document.getElementById("sky");
   const ctx = canvas.getContext("2d");
   const toast = document.getElementById("areaToast");
+  const loadingScreen = document.getElementById("loadingScreen");
+  const progressBar = document.getElementById("progressBar");
 
   let W = 0, H = 0;
   const DPR = Math.min(window.devicePixelRatio || 1, 2);
@@ -329,22 +632,21 @@ quoteCloseBtn.onclick = () => {
   let camDist = 1400;
   let targetCamDist = 1400;
   let rotX = 0;
-  let rotY = 0;
   let targetRotX = 0;
+  let rotY = 0;
   let targetRotY = 0;
 
-  // 区域配置：按相机距离划分 10 个 area
   const AREAS = [
-    { id: 1, minDist: 500,  maxDist: 2600, color: [255, 225, 140], name: "area1" },
-    { id: 2, minDist: 2600, maxDist: 4700, color: [255, 80, 80],  name: "area2" },
-    { id: 3, minDist: 4700, maxDist: 6800, color: [80, 255, 140], name: "area3" },
-    { id: 4, minDist: 6800, maxDist: 8900, color: [180, 100, 255],name: "area4" },
-    { id: 5, minDist: 8900, maxDist: 11000,color: [100, 255, 180],name: "area5" },
-    { id: 6, minDist: 11000,maxDist: 13100,color: [80, 170, 255], name: "area6" },
-    { id: 7, minDist: 13100,maxDist: 15200,color: [255, 180, 220],name: "area7" },
-    { id: 8, minDist: 15200,maxDist: 17300,color: [200, 220, 255],name: "area8" },
-    { id: 9, minDist: 17300,maxDist: 19400,color: [255, 210, 130],name: "area9" },
-    { id: 10,minDist: 19400,maxDist: 22000,color: [140, 110, 255],name: "area10"}
+    { id: 1, minDist: 500*2,  maxDist: 2600*2, color: [255, 225, 140], name: "area1" },
+    { id: 2, minDist: 2600*2, maxDist: 4700*2, color: [255, 80, 80],  name: "area2" },
+    { id: 3, minDist: 4700*2, maxDist: 6800*2, color: [80, 255, 140], name: "area3" },
+    { id: 4, minDist: 6800*2, maxDist: 8900*2, color: [180, 100, 255],name: "area4" },
+    { id: 5, minDist: 8900*2, maxDist: 11000*2,color: [100, 255, 180],name: "area5" },
+    { id: 6, minDist: 11000*2,maxDist: 13100*2,color: [80, 170, 255], name: "area6" },
+    { id: 7, minDist: 13100*2,maxDist: 15200*2,color: [255, 180, 220],name: "area7" },
+    { id: 8, minDist: 15200*2,maxDist: 17300*2,color: [200, 220, 255],name: "area8" },
+    { id: 9, minDist: 17300*2,maxDist: 19400*2,color: [255, 210, 130],name: "area9" },
+    { id: 10,minDist: 19400*2,maxDist: 22000*2,color: [140, 110, 255],name: "area10"}
   ];
 
   let currentAreaId = 1;
@@ -357,8 +659,8 @@ quoteCloseBtn.onclick = () => {
     return AREAS[0];
   }
 
-  function showAreaToast(area) {
-    toast.textContent = `您已进入 ${area.name}`;
+  function showAreaToast(text) {
+    toast.textContent = text;
     toast.classList.add("show");
     clearTimeout(toastTimer);
     toastTimer = setTimeout(() => toast.classList.remove("show"), 1600);
@@ -368,60 +670,22 @@ quoteCloseBtn.onclick = () => {
   const planets = [];
   let starIdCounter = 0;
 
-  // =====================【新增银河星云：匹配恐龙探海星野色调】=====================
-  const nebulaClouds = [];
-  const nebulaCount = 22;
-  for (let i = 0; i < nebulaCount; i++) {
-    const baseR = 2000 + Math.random() * 4500;
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    let color;
-    const isGalacticCenter = Math.abs(Math.cos(phi)) > 0.62;
-    if(isGalacticCenter){
-      color = [255, 220, 200]; //银河亮带暖米白
-    }else{
-      color = Math.random() < 0.5 ? [145, 95, 190] : [220, 150, 180]; //淡紫/浅粉
-    }
-    nebulaClouds.push({
-      x: baseR * Math.sin(phi) * Math.cos(theta),
-      y: baseR * Math.sin(phi) * Math.sin(theta),
-      z: baseR * Math.cos(phi) - 6500,
-      radius: 320 + Math.random() * 480,
-      color: color,
-      opacity: 0.035 + Math.random() * 0.055,
-      drift: {
-        x: (Math.random() - 0.5) * 0.0025,
-        y: (Math.random() - 0.5) * 0.0025,
-        z: (Math.random() - 0.5) * 0.001
-      }
-    });
-  }
-  //星云绘制函数
-  function drawNebula(cloud){
-    const p = project(cloud.x, cloud.y, cloud.z);
-    if (!p) return;
-    if (p.scale < 0.02) return;
-    const r = cloud.radius * p.scale;
-    if (r < 2) return;
-    const grad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r);
-    grad.addColorStop(0, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, ${cloud.opacity})`);
-    grad.addColorStop(0.5, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, ${cloud.opacity * 0.35})`);
-    grad.addColorStop(1, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, 0)`);
-    ctx.fillStyle = grad;
-    ctx.beginPath();
-    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
+  const sandGiantRadius = 220 * 8;
+  const redGiantRadius = sandGiantRadius * 3;
 
-  // =====================【新增 蓝色大行星 + 小行星带 + 恒星】=====================
-  // 蓝色大行星
-  const bigPlanet = {
-    x:-900, y:0, z:-1600,
-    radius:220,
-    color:[68,119,187],
-    rot:0
-  };
-  //小行星数组
+  const bigPlanets = [
+    { x:-900*3, y:0, z:-1600*3, radius:220, color:[68,119,187], rot:0, isBlueGiant:true },
+    { x:1200*3, y:400*3, z:-2200*3, radius:180, color:[70,125,195], rot:0, isBlueGiant:true },
+    { x:-1400*3, y:-500*3, z:-2800*3, radius:260, color:[55,100,170], rot:0, isBlueGiant:true },
+    { x:700*3, y:-800*3, z:-1900*3, radius:160, color:[75,130,200], rot:0, isBlueGiant:true },
+    { x:-600*3, y:600*3, z:-3200*3, radius:200, color:[60,110,180], rot:0, isBlueGiant:true },
+    { x:1600*3, y:-200*3, z:-2500*3, radius:230, color:[80,135,205], rot:0, isBlueGiant:true },
+    { x:-1800*3, y:200*3, z:-2100*3, radius:170, color:[65,115,185], rot:0, isBlueGiant:true },
+    { x: 3500, y: -1800, z: -6000, radius:sandGiantRadius, color:[194,145,70], rot:0, type:"sand", isSandGiant:true },
+    { x: -4200, y: 2200, z: -7200, radius:sandGiantRadius, color:[170,128,60], rot:0, type:"sand", isSandGiant:true },
+    { x: 12000, y: -6000, z: -14000, radius:redGiantRadius, color:[180,20,20], rot:0, type:"redgiant", isRedGiant:true }
+  ];
+
   const asteroids = [];
   const asteroidCount = 900;
   for(let i=0;i<asteroidCount;i++){
@@ -438,14 +702,67 @@ quoteCloseBtn.onclick = () => {
       rotZ:Math.random()*Math.PI
     })
   }
-  //右上角恒星
+
   const sun = {
-    x:1400,y:700,z:-1200,
+    x:1400*3,y:700*3,z:-1200*3,
     radius:120,
     color:[255,255,255]
   };
 
-  // 生成星星：每个 area 内的星星带对应区域色，新增id、noteText、noteDom
+  const meteors = [];
+  const METEOR_SPAWN_INTERVAL = 1200;
+  let meteorTimer = 0;
+
+  function spawnMeteor(){
+    const angle = Math.random() * Math.PI*0.6 + Math.PI*0.2;
+    const speed = 4 + Math.random()*6;
+    const length = 60 + Math.random()*120;
+    meteors.push({
+      x: Math.random()*W,
+      y: Math.random()*H*0.4,
+      vx: Math.cos(angle)*speed,
+      vy: Math.sin(angle)*speed,
+      len:length,
+      alpha:1,
+      life:1
+    })
+  }
+
+  function drawMeteor(met){
+    ctx.save();
+    ctx.beginPath();
+    ctx.moveTo(met.x, met.y);
+    ctx.lineTo(met.x - met.vx*met.len/10, met.y - met.vy*met.len/10);
+    const grad = ctx.createLinearGradient(
+      met.x,met.y,
+      met.x - met.vx*met.len/10, met.y - met.vy*met.len/10
+    );
+    grad.addColorStop(0,`rgba(255,255,255,${met.alpha})`);
+    grad.addColorStop(1,`rgba(255,255,255,0)`);
+    ctx.strokeStyle = grad;
+    ctx.lineWidth = 1.2;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function updateMeteors(dt){
+    meteorTimer += dt;
+    if(meteorTimer > METEOR_SPAWN_INTERVAL){
+      spawnMeteor();
+      meteorTimer = 0;
+    }
+    for(let i=meteors.length-1;i>=0;i--){
+      const m = meteors[i];
+      m.x += m.vx;
+      m.y += m.vy;
+      m.life -= 0.016;
+      m.alpha = Math.max(0, m.life);
+      if(m.life <=0 || m.x>W+100 || m.y>H+100){
+        meteors.splice(i,1);
+      }
+    }
+  }
+
   const STAR_COUNT = 2400;
   for (let i = 0; i < STAR_COUNT; i++) {
     const area = AREAS[Math.floor(Math.random() * AREAS.length)];
@@ -456,28 +773,24 @@ quoteCloseBtn.onclick = () => {
     const y = r * Math.sin(phi) * Math.sin(theta);
     const z = r * Math.cos(phi);
 
-    //银河区域星星提亮，匹配照片银河密集亮星效果
-    let brightnessMult = 1;
-    if(Math.abs(Math.cos(phi))>0.62){
-      brightnessMult = 1.6;
-    }
-
     stars.push({
       id: starIdCounter++,
       x, y, z,
       areaId: area.id,
-      baseR: (0.18 + Math.random() * 0.42)*brightnessMult,
+      baseR: 0.18 + Math.random() * 0.42,
       color: area.color,
       twinkleSpeed: 0.0005 + Math.random() * 0.0012,
       twinklePhase: Math.random() * Math.PI * 2,
       flow: { x: 0.04, y: 0.016, z: 0.008 },
       noteText:"",
       noteDom:null,
-      proj:null
+      proj:null,
+      isBlueGiant:false,
+      isSandGiant:false,
+      isRedGiant:false
     });
   }
 
-  // 生成 26 颗基础行星
   const PLANET_COUNT = 26;
   const planetColors = [
     [220, 120, 80], [80, 140, 200], [160, 90, 120], [100, 170, 130],
@@ -509,39 +822,6 @@ quoteCloseBtn.onclick = () => {
     });
   }
 
-  // ==========【新增：Area6 ~ Area10 批量生成大巨行星】==========
-  const GIANT_PLANET_COUNT = 12; // 你可以修改这个数字，增减巨行星数量
-  const giantColors = [
-    [70,130,220],   //蓝
-    [240,180,90],   //土黄
-    [210,110,80],   //橙红
-    [180,100,180],  //紫
-    [100,200,170],  //青
-    [220,140,190]   //粉
-  ];
-  for(let i=0; i<GIANT_PLANET_COUNT; i++){
-    // 锁定距离：11000 ~ 22000 (area6-area10)
-    const r = 11000 + Math.random() * (22000 - 11000);
-    const theta = Math.random() * Math.PI * 2;
-    const phi = Math.acos(2 * Math.random() - 1);
-    const x = r * Math.sin(phi) * Math.cos(theta);
-    const y = r * Math.sin(phi) * Math.sin(theta);
-    const z = r * Math.cos(phi);
-
-    // 判断属于哪个area，赋值areaId
-    const areaInfo = getAreaByDist(r);
-    planets.push({
-      x, y, z,
-      areaId: areaInfo.id,
-      radius: 60 + Math.random() * 50, // 大行星半径：60 ~ 110，远大于普通行星
-      color: giantColors[i % giantColors.length],
-      vx: (Math.random() - 0.5) * 0.004, // 移动更缓慢，远距离行星不要太快
-      vy: (Math.random() - 0.5) * 0.004,
-      vz: (Math.random() - 0.5) * 0.004
-    });
-  }
-
-  // 触摸控制：缩放进入区域
   let touching = false;
   let lastX = 0;
   let lastY = 0;
@@ -586,6 +866,38 @@ quoteCloseBtn.onclick = () => {
   }, { passive: false });
 
   canvas.addEventListener("touchend", () => touching = false);
+
+  canvas.onclick = (evt) => {
+    const mx = evt.clientX;
+    const my = evt.clientY;
+    let hitStar = null;
+    let minD = 9999;
+    for(const s of stars){
+      if(!s.proj) continue;
+      const d = Math.hypot(mx - s.proj.sx, my - s.proj.sy);
+      if(d < 12 && d < minD){
+        minD = d;
+        hitStar = s;
+      }
+    }
+    for(const bp of bigPlanets){
+      const p = project(bp.x,bp.y,bp.z);
+      if(!p) continue;
+      const screenR = bp.radius * p.scale;
+      const d = Math.hypot(mx - p.sx, my - p.sy);
+      if(d < screenR && d < minD){
+        minD = d;
+        hitStar = bp;
+      }
+    }
+    if(hitStar){
+      selectedStar = hitStar;
+      const randQuote = quoteList[Math.floor(Math.random()*quoteList.length)];
+      quoteCN.innerText = randQuote.cn;
+      quoteEN.innerText = randQuote.en;
+      quoteModal.classList.add("open");
+    }
+  }
 
   function project(px, py, pz) {
     let x = px * Math.cos(rotY) - pz * Math.sin(rotY);
@@ -632,27 +944,42 @@ quoteCloseBtn.onclick = () => {
     ctx.fill();
   }
 
-  // 【新增绘制大行星】
-  function drawBigPlanet(p){
+  function drawBigPlanet(p, planet){
     const s = p.scale;
-    const r = bigPlanet.radius * s;
+    const r = planet.radius * s;
     const glow = ctx.createRadialGradient(p.sx, p.sy,0,p.sx,p.sy,r*2.2);
-    glow.addColorStop(0,"rgba(80,130,200,0.5)");
-    glow.addColorStop(1,"rgba(80,130,200,0)");
+    if(planet.type === "sand"){
+      glow.addColorStop(0,"rgba(210,165,90,0.5)");
+      glow.addColorStop(1,"rgba(210,165,90,0)");
+    }else if(planet.type === "redgiant"){
+      glow.addColorStop(0,"rgba(220,40,40,0.65)");
+      glow.addColorStop(1,"rgba(220,40,40,0)");
+    }else{
+      glow.addColorStop(0,"rgba(80,130,200,0.5)");
+      glow.addColorStop(1,"rgba(80,130,200,0)");
+    }
     ctx.fillStyle = glow;
     ctx.beginPath();
     ctx.arc(p.sx,p.sy,r*2.2,0,Math.PI*2);
     ctx.fill();
 
     const bodyGrad = ctx.createRadialGradient(p.sx-r*0.3,p.sy-r*0.3, r*0.1, p.sx,p.sy,r);
-    bodyGrad.addColorStop(0,"#77aadd");
-    bodyGrad.addColorStop(1,"#335588");
+    if(planet.type === "sand"){
+      bodyGrad.addColorStop(0,"#e6c288");
+      bodyGrad.addColorStop(1,"#8c6836");
+    }else if(planet.type === "redgiant"){
+      bodyGrad.addColorStop(0,"#ff6b6b");
+      bodyGrad.addColorStop(1,"#7a1414");
+    }else{
+      bodyGrad.addColorStop(0,"#77aadd");
+      bodyGrad.addColorStop(1,"#335588");
+    }
     ctx.fillStyle = bodyGrad;
     ctx.beginPath();
     ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
     ctx.fill();
   }
-  //【新增绘制小行星】
+
   function drawAsteroid(p,ast){
     const s = p.scale;
     const r = ast.r * s;
@@ -661,11 +988,10 @@ quoteCloseBtn.onclick = () => {
     ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
     ctx.fill();
   }
-  //【新增绘制恒星+镜头光晕】
+
   function drawSun(p){
     const s = p.scale;
     const r = sun.radius * s;
-    //外层大光晕
     const flare = ctx.createRadialGradient(p.sx,p.sy,0,p.sx,p.sy,r*3.5);
     flare.addColorStop(0,"rgba(255,255,255,1)");
     flare.addColorStop(0.2,"rgba(255,255,200,0.6)");
@@ -674,7 +1000,6 @@ quoteCloseBtn.onclick = () => {
     ctx.beginPath();
     ctx.arc(p.sx,p.sy,r*3.5,0,Math.PI*2);
     ctx.fill();
-    //恒星本体
     ctx.fillStyle="#ffffff";
     ctx.beginPath();
     ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
@@ -682,11 +1007,15 @@ quoteCloseBtn.onclick = () => {
   }
 
   function drawStar(s, time) {
+    let brightnessMult = 1;
+    if(gameState.dustStorm) brightnessMult = 0.45;
+    if(gameState.hideBoost) brightnessMult *=0.7;
+
     const p = project(s.x, s.y, s.z);
     if (!p) return;
-    s.proj = p; //保存投影坐标用于点击检测
+    s.proj = p;
 
-    const tw = 0.75 + 0.25 * Math.sin(time * s.twinkleSpeed + s.twinklePhase);
+    const tw = brightnessMult * (0.75 + 0.25 * Math.sin(time * s.twinkleSpeed + s.twinklePhase));
     const r = Math.max(0.12, s.baseR * p.scale * 70 * tw);
     const [cr, cg, cb] = s.color;
 
@@ -703,7 +1032,6 @@ quoteCloseBtn.onclick = () => {
     ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
     ctx.fill();
 
-    // 更新留言文字位置，跟随3D星星
     if(s.noteDom){
       s.noteDom.style.left = p.sx + "px";
       s.noteDom.style.top = p.sy + "px";
@@ -728,128 +1056,89 @@ quoteCloseBtn.onclick = () => {
     pl.y += pl.vy;
     pl.z += pl.vz;
 
-    const l = Math.hypot(pl.x, pl.y, pl.z);
-    if (l > 22000) {
-      pl.x *= 0.84;
-      pl.y *= 0.84;
-      pl.z *= 0.84;
+    const len = Math.hypot(pl.x, pl.y, pl.z);
+    if(len > 22000){
+      pl.x *=0.78;
+      pl.y *=0.78;
+      pl.z *=0.78;
     }
   }
 
-  // ===== 点击拾取星星 =====
-  canvas.addEventListener('click', (e)=>{
-    // 如果弹窗打开，忽略画布点击
-    if(quoteModal.classList.contains('open') || msgBox.style.display === "block") return;
-    const mx = e.clientX;
-    const my = e.clientY;
-    // 由近到远查找星星
-    const sortedStars = [...stars].filter(s=>s.proj).sort((a,b)=>a.proj.z - b.proj.z);
-    for(const st of sortedStars){
-      const dx = mx - st.proj.sx;
-      const dy = my - st.proj.sy;
-      const dist = Math.sqrt(dx*dx + dy*dy);
-      if(dist < 12){
-        // 命中星星
-        selectedStar = st;
-        // 弹出哲理句子
-        const randomQuote = quoteList[Math.floor(Math.random() * quoteList.length)];
-        quoteCN.innerText = randomQuote.cn;
-        quoteEN.innerText = randomQuote.en;
-        quoteModal.classList.add('open');
-        return;
+  let lastTime = 0;
+  let loadProgress = 0;
+  const totalLoadTime = 1800;
+
+  function animate(time) {
+    requestAnimationFrame(animate);
+    const dt = time - lastTime;
+    lastTime = time;
+
+    if(loadProgress < 1){
+      loadProgress += dt / totalLoadTime;
+      progressBar.style.width = (loadProgress*100)+"%";
+      if(loadProgress >= 1){
+        loadingScreen.classList.add("fadeout");
       }
     }
-  });
 
-  // 加载历史留言
-  function loadSavedMessages(){
-    const savedList = loadSavedNotes();
-    savedList.forEach(item=>{
-      const targetStar = stars.find(s=>s.id === item.starId);
-      if(targetStar){
-        const safeText = escapeHtml(item.text);
-        targetStar.noteText = safeText;
-        targetStar.noteDom = document.createElement('div');
-        targetStar.noteDom.className = 'star-note';
-        targetStar.noteDom.innerText = safeText;
-        document.body.appendChild(targetStar.noteDom);
-      }
-    })
-  }
-  loadSavedMessages();
+    rotX += (targetRotX - rotX)*0.08;
+    rotY += (targetRotY - rotY)*0.08;
+    camDist += (targetCamDist - camDist)*0.08;
 
-  function loop(time) {
-    ctx.fillStyle = "rgba(2,3,10,0.22)";
-    ctx.fillRect(0, 0, W, H);
-
-    camDist += (targetCamDist - camDist) * 0.08;
-    rotX += (targetRotX - rotX) * 0.08;
-    rotY += (targetRotY - rotY) * 0.08;
-
-    // 区域切换检测
-    const area = getAreaByDist(camDist);
-    if (area.id !== currentAreaId) {
-      currentAreaId = area.id;
-      showAreaToast(area);
+    const areaInfo = getAreaByDist(camDist);
+    if(currentAreaId !== areaInfo.id){
+      currentAreaId = areaInfo.id;
+      showAreaToast(`您已进入 ${areaInfo.name}`);
     }
+    updateCosmicEvents(dt, currentAreaId);
 
-    //更新大行星自转
-    bigPlanet.rot += 0.0015;
-    //小行星整体缓慢旋转
-    asteroids.forEach(a=>{
-      const ang = 0.0008;
-      const ox=0,oz=0;
-      const nx = a.x*Math.cos(ang) - a.z*Math.sin(ang);
-      const nz = a.x*Math.sin(ang) + a.z*Math.cos(ang);
-      a.x = nx;
-      a.z = nz;
+    ctx.fillStyle="#02030a";
+    ctx.fillRect(0,0,W,H);
+
+    updateMeteors(dt);
+    meteors.forEach(m=>drawMeteor(m));
+
+    stars.forEach(s=>{
+      updateStar(s);
+      drawStar(s, time);
     })
 
-    //星云缓慢漂移更新
-    for (const cloud of nebulaClouds) {
-      cloud.x += cloud.drift.x;
-      cloud.y += cloud.drift.y;
-      cloud.z += cloud.drift.z;
-      const l = Math.hypot(cloud.x, cloud.y, cloud.z);
-      if (l > 9000) {
-        cloud.x *= 0.88;
-        cloud.y *= 0.88;
-        cloud.z *= 0.88;
-      }
-    }
+    asteroids.forEach(ast=>{
+      const p = project(ast.x,ast.y,ast.z);
+      if(p) drawAsteroid(p,ast);
+    })
 
-    // ========== 绘制顺序【重点】：星云最先画（最底层背景）==========
-    for (const cloud of nebulaClouds) {
-      drawNebula(cloud);
-    }
+    planets.forEach(pl=>{
+      updatePlanet(pl);
+      const p = project(pl.x,pl.y,pl.z);
+      if(p) drawPlanet(p,pl);
+    })
+
+    bigPlanets.forEach(bp=>{
+      bp.rot += 0.0012;
+      const p = project(bp.x,bp.y,bp.z);
+      if(p) drawBigPlanet(p,bp);
+    })
 
     const sunProj = project(sun.x,sun.y,sun.z);
     if(sunProj) drawSun(sunProj);
-
-    const bpProj = project(bigPlanet.x, bigPlanet.y, bigPlanet.z);
-    if(bpProj) drawBigPlanet(bpProj);
-
-    //绘制小行星
-    for(const ast of asteroids){
-      const ap = project(ast.x,ast.y,ast.z);
-      if(ap) drawAsteroid(ap,ast);
-    }
-
-    for (const st of stars) {
-      updateStar(st);
-      drawStar(st, time);
-    }
-
-    for (const pl of planets) {
-      updatePlanet(pl);
-      const proj = project(pl.x, pl.y, pl.z);
-      if (proj) drawPlanet(proj, pl);
-    }
-
-    requestAnimationFrame(loop);
   }
 
-  requestAnimationFrame(loop);
+  function restoreNotes(){
+    const savedList = loadSavedNotes();
+    savedList.forEach(item=>{
+      const star = stars.find(s=>s.id === item.starId);
+      if(!star) return;
+      star.noteText = escapeHtml(item.text);
+      star.noteDom = document.createElement('div');
+      star.noteDom.className = "star-note";
+      star.noteDom.innerText = star.noteText;
+      document.body.appendChild(star.noteDom);
+    })
+  }
+  restoreNotes();
+
+  requestAnimationFrame(animate);
 })();
 </script>
 </body>
