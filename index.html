@@ -1,1 +1,856 @@
-<h1>star sky</h1>
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>分区宇宙</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+    background: #02030a;
+    touch-action: none;
+    font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif;
+  }
+  canvas {
+    display: block;
+    width: 100%;
+    height: 100%;
+  }
+  .tip {
+    position: fixed;
+    left: 50%;
+    bottom: 24px;
+    transform: translateX(-50%);
+    color: rgba(255, 225, 140, 0.5);
+    font-size: 13px;
+    letter-spacing: 2px;
+    pointer-events: none;
+  }
+  .area-toast {
+    position: fixed;
+    left: 50%;
+    top: 86px;
+    transform: translateX(-50%) translateY(-20px);
+    padding: 10px 18px;
+    border-radius: 999px;
+    background: rgba(255, 255, 255, 0.12);
+    color: #fff;
+    font-size: 14px;
+    letter-spacing: 3px;
+    backdrop-filter: blur(8px);
+    opacity: 0;
+    transition: opacity 0.35s ease, transform 0.35s ease;
+    pointer-events: none;
+    white-space: nowrap;
+  }
+  .area-toast.show {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+
+  /* 弹窗通用 */
+  .modal{position:fixed;inset:0;background:rgba(0,0,0,0.75);display:none;align-items:center;justify-content:center;padding:16px;z-index:20;}
+  .modal.open{display:flex;}
+  .panel{width:100%;max-width:420px;background:#0b0f1c;border-radius:18px;padding:20px;color:#fff;border:1px solid rgba(255,255,255,0.15);}
+  /* 哲理双语弹窗 */
+  #quoteModal .panel{
+    background: radial-gradient(circle at center, #101428 0%, #02030a 100%);
+    padding:28px 24px;
+  }
+  .quote-cn{font-size:18px;line-height:1.7;color:#ffe190;margin-bottom:16px;text-align:center;}
+  .quote-en{font-size:14px;line-height:1.6;color:#cde0ff;text-align:center;}
+  .quote-close{margin-top:20px;width:100%;padding:10px;border-radius:10px;border:none;font-size:14px;background:#5886ff;color:#fff;cursor:pointer;}
+
+  /* 留言面板 */
+  .msg-panel{
+    position:fixed;
+    top:50%;
+    left:50%;
+    transform:translate(-50%,-50%);
+    background:rgba(0,0,0,0.88);
+    padding:24px;
+    border-radius:16px;
+    z-index:30;
+    width:82%;
+    max-width:340px;
+    color:#fff;
+    display:none;
+  }
+  .msg-panel h3{
+    margin-bottom:12px;
+    font-weight:normal;
+  }
+  .msg-panel textarea{
+    width:100%;
+    height:110px;
+    background:#1a1a1a;
+    color:#fff;
+    border:1px solid #555;
+    border-radius:10px;
+    padding:10px;
+    font-size:16px;
+  }
+  .btn-group{
+    display:flex;
+    gap:12px;
+    margin-top:14px;
+  }
+  .btn-group button{
+    flex:1;
+    padding:11px;
+    border-radius:10px;
+    border:none;
+    font-size:16px;
+  }
+  .submit{background:#4285f4;color:white;}
+  .close{background:#444;color:white;}
+  /* 星星上的留言文字 */
+  .star-note{
+    position:absolute;
+    color:#ffffff;
+    font-size:12px;
+    pointer-events:none;
+    white-space:nowrap;
+    transform:translate(-50%, -180%);
+  }
+</style>
+</head>
+<body>
+<canvas id="sky"></canvas>
+<div class="tip">拖拽旋转宇宙 · 双指缩放切换区域 · 点击星星阅读句子</div>
+<div class="area-toast" id="areaToast"></div>
+
+<!-- 双语哲理句子弹窗 -->
+<div class="modal" id="quoteModal">
+<div class="panel">
+  <div class="quote-cn" id="quoteCN"></div>
+  <div class="quote-en" id="quoteEN"></div>
+  <button class="quote-close" id="quoteCloseBtn">继续</button>
+</div>
+</div>
+
+<!-- 留言弹窗 -->
+<div class="msg-panel" id="msgBox">
+  <h3>给这颗星星留言</h3>
+  <textarea id="msgInput" placeholder="写下你的留言..."></textarea>
+  <div class="btn-group">
+    <button class="submit" id="submitBtn">提交</button>
+    <button class="close" id="closeBtn">关闭</button>
+  </div>
+</div>
+
+<script>
+// ====================== 80条中英双语哲理句子池 ======================
+const quoteList = [
+{"cn":"万物皆有裂痕，那是光照进来的地方。","en":"There is a crack in everything, that's how the light gets in."},
+{"cn":"生活不是等待风暴过去，而是学会在雨中起舞。","en":"Life isn't about waiting for the storm to pass, it's about learning to dance in the rain."},
+{"cn":"凡心所向，素履以往。","en":"Where the heart leads, one will march in plain shoes."},
+{"cn":"真正的强大，不是从不跌倒，而是跌倒后依然愿意前行。","en":"True strength is not never falling, but still willing to move forward after falling."},
+{"cn":"宁静不是远离喧嚣，而是内心自有山河。","en":"Peace is not escaping noise, but having mountains and rivers within your heart."},
+{"cn":"人生如逆旅，我亦是行人。","en":"Life is like a journey against the current; I too am a traveler."},
+{"cn":"不必追光，你我皆是星辰。","en":"No need to chase light; you and I are stars ourselves."},
+{"cn":"心若安宁，何处不是港湾。","en":"If your heart is calm, every place can be a harbor."},
+{"cn":"接纳无常，才是长久的自由。","en":"Accepting impermanence brings lasting freedom."},
+{"cn":"温柔是一种强大，不是软弱。","en":"Gentleness is strength, not weakness."},
+{"cn":"与其抱怨黑暗，不如提灯前行。","en":"Rather than complaining about darkness, carry a lamp forward."},
+{"cn":"最好的关系，是安心的沉默。","en":"The best relationship is comfortable silence."},
+{"cn":"人生没有白走的路，每一步都算数。","en":"No road is walked in vain; every step counts."},
+{"cn":"人最大的自由，是选择自己的心态。","en":"The greatest freedom is choosing your own mindset."},
+{"cn":"向内扎根，方能向外生长。","en":"Root deep inside to grow outward."},
+{"cn":"守住内心秩序，外界便难以扰乱你。","en":"Guard your inner order, and the world cannot disturb you."},
+{"cn":"生命的美好，藏在微小的瞬间。","en":"Beauty of life hides in tiny moments."},
+{"cn":"简单，是最高级的浪漫。","en":"Simplicity is the highest form of romance."},
+{"cn":"放下期待，反而更容易遇见惊喜。","en":"Let go of expectations, and surprises may come."},
+{"cn":"道阻且长，行则将至。","en":"The road is long and hard, yet progress brings arrival."},
+{"cn":"时光从不言语，却回答所有问题。","en":"Time never speaks, yet it answers all questions."},
+{"cn":"不必与他人赛跑，每个人都有自己的时区。","en":"Don’t race with others; everyone has their own time zone."},
+{"cn":"花开有时，凋零亦有时，万物自有节律。","en":"There is a time to bloom and a time to fade; all things follow their rhythm."},
+{"cn":"你能掌控的只有当下，过去不可追，未来未可知。","en":"Only the present is yours to hold; the past is gone and the future unknown."},
+{"cn":"真正成熟，是学会温柔地接纳不完美的自己。","en":"True maturity is learning to gently accept your own imperfections."},
+{"cn":"微光亦可照亮前路，不必强求万丈光芒。","en":"A faint light can light the path; you need not shine brilliantly."},
+{"cn":"心有山海，静而不争。","en":"With mountains and seas in your heart, stay calm and strive not to contend."},
+{"cn":"所有的奔赴，终有归处。","en":"Every journey will eventually find its destination."},
+{"cn":"认知的边界，便是世界的边界。","en":"The boundary of your understanding defines the boundary of your world."},
+{"cn":"允许一切发生，是一种强大的松弛。","en":"Allowing everything to happen is a powerful ease of mind."},
+{"cn":"慢慢走，沿途风景比终点更动人。","en":"Walk slowly; the scenery along the way is more touching than the destination."},
+{"cn":"幸福不在远方，藏在每一个平凡日常。","en":"Happiness lies not far away, but hidden in ordinary days."},
+{"cn":"守住本心，任凭世事翻涌。","en":"Hold fast to your true self amid the tides of the world."},
+{"cn":"学会放下执念，才能拥抱自由。","en":"Let go of obsession to embrace freedom."},
+{"cn":"风会带走尘埃，时间会抚平伤痕。","en":"Wind sweeps away dust, and time heals wounds."},
+{"cn":"看见别人，亦是看见自己。","en":"To see others is also to see yourself."},
+{"cn":"生活的答案，需要亲自慢慢体悟。","en":"You have to slowly perceive life’s answers on your own."},
+{"cn":"勇气不是毫无恐惧，心怀恐惧依旧向前。","en":"Courage is not fearlessness, but moving forward even with fear."},
+{"cn":"万物自生自洽，不必强行解释。","en":"All things exist in harmony; no forced explanation is needed."},
+{"cn":"独处不是孤独，是与灵魂重逢。","en":"Solitude is not loneliness; it is reunion with your soul."},
+{"cn":"每一次沉淀，都是为了更好的升起。","en":"Every moment of stillness prepares you to rise again."},
+{"cn":"世界的温柔，等待有心之人发现。","en":"The tenderness of the world awaits those who watch carefully."},
+{"cn":"少向外索取，多向内丰盈。","en":"Seek less from outside, enrich more within."},
+{"cn":"命运的馈赠，从来都需要耐心等候。","en":"Gifts of fate always require patient waiting."},
+{"cn":"不必耀眼，安稳自在已是难得。","en":"You need not dazzle; peace and ease are precious enough."},
+{"cn":"改变始于微小的选择，而非宏大誓言。","en":"Change begins with small choices, not grand promises."},
+{"cn":"保持热爱，可抵岁月漫长。","en":"Keep your passion, it sustains you through long years."},
+{"cn":"黑夜的意义，是为了等待黎明。","en":"The meaning of night is to await the dawn."},
+{"cn":"善意从来不是牺牲，是发自内心的选择。","en":"Kindness is not sacrifice, but a choice from the heart."},
+{"cn":"生命本是旷野，不是一条既定轨道。","en":"Life is an open wilderness, not a fixed track."},
+{"cn":"山高水远，终有相逢之时。","en":"Though mountains are high and waters far, there will come a meeting day."},
+{"cn":"你不必活成别人期待的模样。","en":"You do not have to live up to others' expectations."},
+{"cn":"安静积蓄力量，胜过喧嚣的张扬。","en":"Quietly gathering strength beats noisy showing off."},
+{"cn":"接纳遗憾，也是一种成长。","en":"Accepting regret is also a form of growth."},
+{"cn":"星星从不争抢光芒，依旧被仰望。","en":"Stars do not compete for light, yet they are admired."},
+{"cn":"专注自己的路，不必时时回望旁人。","en":"Focus on your own path, and do not constantly watch others."},
+{"cn":"真正的自由，始于自洽。","en":"True freedom begins with inner harmony."},
+{"cn":"风雨会来，也一定会过去。","en":"Storms will come, and they will surely pass."},
+{"cn":"善待自己，是一生最重要的功课。","en":"Being kind to yourself is life's most important lesson."},
+{"cn":"越是沉静，越能听见内心的声音。","en":"The calmer you are, the clearer you hear your inner voice."},
+{"cn":"美好事物，值得耐心等候。","en":"Beautiful things deserve patient waiting."},
+{"cn":"不要害怕缓慢，停滞才是浪费。","en":"Do not fear slowness; stagnation is the real waste."},
+{"cn":"心宽一寸，路宽一丈。","en":"Widen your heart an inch, and your path will widen a zhang."},
+{"cn":"世间所有长久，都源于温柔坚持。","en":"All lasting things in the world come from gentle persistence."},
+{"cn":"你本身的存在，就有意义。","en":"Your very existence carries meaning."},
+{"cn":"放下不属于你的，才能接住属于你的。","en":"Let go of what is not yours to receive what belongs to you."},
+{"cn":"人间草木，各自芬芳。","en":"Plants on earth bloom each in their own fragrance."},
+{"cn":"向外看的人做梦，向内看的人清醒。","en":"Those who look outward dream; those who look inward stay awake."},
+{"cn":"前路漫漫，允许自己偶尔停歇。","en":"The road ahead is long; allow yourself rest sometimes."},
+{"cn":"真诚永远是最珍贵的底色。","en":"Sincerity is always the most precious foundation."},
+{"cn":"不必一次性抵达终点，一步步走就好。","en":"You need not reach the end at once; just walk step by step."},
+{"cn":"命运善待愿意好好生活的人。","en":"Fate treats kindly those who choose to live well."},
+{"cn":"心有微光，不惧长夜。","en":"With faint light in heart, fear not the endless night."},
+{"cn":"所有释然，都是时间慢慢成全。","en":"All relief is slowly granted by time."},
+{"cn":"守住简单，便守住安宁。","en":"Keep things simple, and you keep peace."},
+{"cn":"不要用别人的标尺丈量自己。","en":"Do not measure yourself with others' ruler."},
+{"cn":"人生最美的风景，是内心的从容。","en":"Life's most beautiful scenery is inner composure."},
+{"cn":"你可以脆弱，也可以重新站起来。","en":"You may be vulnerable, yet you can rise again."},
+{"cn":"花开不为取悦谁，只为完成自己。","en":"Flowers bloom not to please others, but to fulfill themselves."},
+{"cn":"生活的力量，藏在平静之中。","en":"The power of life lies in stillness."}
+];
+
+// 哲理弹窗DOM
+const quoteModal = document.getElementById('quoteModal');
+const quoteCN = document.getElementById('quoteCN');
+const quoteEN = document.getElementById('quoteEN');
+const quoteCloseBtn = document.getElementById('quoteCloseBtn');
+
+// 留言面板DOM
+const msgBox = document.getElementById('msgBox');
+const msgInput = document.getElementById('msgInput');
+const submitBtn = document.getElementById('submitBtn');
+const closeBtn = document.getElementById('closeBtn');
+
+// 存储
+const STORAGE_KEY = "starMessages";
+let selectedStar = null;
+
+// XSS转义
+function escapeHtml(str) {
+  return String(str)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+function loadSavedNotes(){
+  const raw = localStorage.getItem(STORAGE_KEY);
+  return raw ? JSON.parse(raw) : [];
+}
+function saveNotes(list){
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+}
+window.clearAllNotes = function(){
+  localStorage.removeItem(STORAGE_KEY);
+  stars.forEach(s=>{
+    if(s.noteDom) s.noteDom.remove();
+    s.noteText = "";
+    s.noteDom = null;
+  })
+}
+
+// 关闭留言弹窗
+closeBtn.onclick = ()=>{
+  msgBox.style.display = 'none';
+  msgInput.value = '';
+  selectedStar = null;
+}
+// 提交留言
+submitBtn.onclick = ()=>{
+  const txt = msgInput.value.trim();
+  if(!txt || !selectedStar) return;
+  const safeText = escapeHtml(txt);
+  selectedStar.noteText = safeText;
+  selectedStar.noteDom = document.createElement('div');
+  selectedStar.noteDom.className = 'star-note';
+  selectedStar.noteDom.innerText = safeText;
+  document.body.appendChild(selectedStar.noteDom);
+  // 保存本地
+  const saved = loadSavedNotes();
+  saved.push({
+    starId: selectedStar.id,
+    text: txt
+  });
+  saveNotes(saved);
+
+  msgBox.style.display = 'none';
+  msgInput.value = '';
+  selectedStar = null;
+}
+
+// 点击星星：弹出哲理句子，关闭后打开留言框
+quoteCloseBtn.onclick = () => {
+  quoteModal.classList.remove('open');
+  // 打开留言面板
+  msgBox.style.display = "block";
+};
+
+// ===================== 原版 3D分区宇宙代码 =====================
+(() => {
+  const canvas = document.getElementById("sky");
+  const ctx = canvas.getContext("2d");
+  const toast = document.getElementById("areaToast");
+
+  let W = 0, H = 0;
+  const DPR = Math.min(window.devicePixelRatio || 1, 2);
+
+  function resize() {
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * DPR;
+    canvas.height = H * DPR;
+    canvas.style.width = W + "px";
+    canvas.style.height = H + "px";
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  resize();
+  window.addEventListener("resize", resize);
+
+  const FOV = 340;
+  let camDist = 1400;
+  let targetCamDist = 1400;
+  let rotX = 0;
+  let rotY = 0;
+  let targetRotX = 0;
+  let targetRotY = 0;
+
+  // 区域配置：按相机距离划分 10 个 area
+  const AREAS = [
+    { id: 1, minDist: 500,  maxDist: 2600, color: [255, 225, 140], name: "area1" },
+    { id: 2, minDist: 2600, maxDist: 4700, color: [255, 80, 80],  name: "area2" },
+    { id: 3, minDist: 4700, maxDist: 6800, color: [80, 255, 140], name: "area3" },
+    { id: 4, minDist: 6800, maxDist: 8900, color: [180, 100, 255],name: "area4" },
+    { id: 5, minDist: 8900, maxDist: 11000,color: [100, 255, 180],name: "area5" },
+    { id: 6, minDist: 11000,maxDist: 13100,color: [80, 170, 255], name: "area6" },
+    { id: 7, minDist: 13100,maxDist: 15200,color: [255, 180, 220],name: "area7" },
+    { id: 8, minDist: 15200,maxDist: 17300,color: [200, 220, 255],name: "area8" },
+    { id: 9, minDist: 17300,maxDist: 19400,color: [255, 210, 130],name: "area9" },
+    { id: 10,minDist: 19400,maxDist: 22000,color: [140, 110, 255],name: "area10"}
+  ];
+
+  let currentAreaId = 1;
+  let toastTimer = null;
+
+  function getAreaByDist(dist) {
+    for (const a of AREAS) {
+      if (dist >= a.minDist && dist < a.maxDist) return a;
+    }
+    return AREAS[0];
+  }
+
+  function showAreaToast(area) {
+    toast.textContent = `您已进入 ${area.name}`;
+    toast.classList.add("show");
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => toast.classList.remove("show"), 1600);
+  }
+
+  const stars = [];
+  const planets = [];
+  let starIdCounter = 0;
+
+  // =====================【新增银河星云：匹配恐龙探海星野色调】=====================
+  const nebulaClouds = [];
+  const nebulaCount = 22;
+  for (let i = 0; i < nebulaCount; i++) {
+    const baseR = 2000 + Math.random() * 4500;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    let color;
+    const isGalacticCenter = Math.abs(Math.cos(phi)) > 0.62;
+    if(isGalacticCenter){
+      color = [255, 220, 200]; //银河亮带暖米白
+    }else{
+      color = Math.random() < 0.5 ? [145, 95, 190] : [220, 150, 180]; //淡紫/浅粉
+    }
+    nebulaClouds.push({
+      x: baseR * Math.sin(phi) * Math.cos(theta),
+      y: baseR * Math.sin(phi) * Math.sin(theta),
+      z: baseR * Math.cos(phi) - 6500,
+      radius: 320 + Math.random() * 480,
+      color: color,
+      opacity: 0.035 + Math.random() * 0.055,
+      drift: {
+        x: (Math.random() - 0.5) * 0.0025,
+        y: (Math.random() - 0.5) * 0.0025,
+        z: (Math.random() - 0.5) * 0.001
+      }
+    });
+  }
+  //星云绘制函数
+  function drawNebula(cloud){
+    const p = project(cloud.x, cloud.y, cloud.z);
+    if (!p) return;
+    if (p.scale < 0.02) return;
+    const r = cloud.radius * p.scale;
+    if (r < 2) return;
+    const grad = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r);
+    grad.addColorStop(0, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, ${cloud.opacity})`);
+    grad.addColorStop(0.5, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, ${cloud.opacity * 0.35})`);
+    grad.addColorStop(1, `rgba(${cloud.color[0]}, ${cloud.color[1]}, ${cloud.color[2]}, 0)`);
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // =====================【新增 蓝色大行星 + 小行星带 + 恒星】=====================
+  // 蓝色大行星
+  const bigPlanet = {
+    x:-900, y:0, z:-1600,
+    radius:220,
+    color:[68,119,187],
+    rot:0
+  };
+  //小行星数组
+  const asteroids = [];
+  const asteroidCount = 900;
+  for(let i=0;i<asteroidCount;i++){
+    const ringR = 700 + Math.random()*800;
+    const ang = Math.random()*Math.PI*2;
+    asteroids.push({
+      x: Math.cos(ang)*ringR,
+      y: (Math.random()-0.5)*140,
+      z: Math.sin(ang)*ringR,
+      r: 4 + Math.random()*28,
+      color:[110,110,110],
+      rotX:Math.random()*Math.PI,
+      rotY:Math.random()*Math.PI,
+      rotZ:Math.random()*Math.PI
+    })
+  }
+  //右上角恒星
+  const sun = {
+    x:1400,y:700,z:-1200,
+    radius:120,
+    color:[255,255,255]
+  };
+
+  // 生成星星：每个 area 内的星星带对应区域色，新增id、noteText、noteDom
+  const STAR_COUNT = 2400;
+  for (let i = 0; i < STAR_COUNT; i++) {
+    const area = AREAS[Math.floor(Math.random() * AREAS.length)];
+    const r = area.minDist + Math.random() * (area.maxDist - area.minDist);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+
+    //银河区域星星提亮，匹配照片银河密集亮星效果
+    let brightnessMult = 1;
+    if(Math.abs(Math.cos(phi))>0.62){
+      brightnessMult = 1.6;
+    }
+
+    stars.push({
+      id: starIdCounter++,
+      x, y, z,
+      areaId: area.id,
+      baseR: (0.18 + Math.random() * 0.42)*brightnessMult,
+      color: area.color,
+      twinkleSpeed: 0.0005 + Math.random() * 0.0012,
+      twinklePhase: Math.random() * Math.PI * 2,
+      flow: { x: 0.04, y: 0.016, z: 0.008 },
+      noteText:"",
+      noteDom:null,
+      proj:null
+    });
+  }
+
+  // 生成 26 颗基础行星
+  const PLANET_COUNT = 26;
+  const planetColors = [
+    [220, 120, 80], [80, 140, 200], [160, 90, 120], [100, 170, 130],
+    [190, 100, 70], [130, 120, 180], [200, 170, 90], [150, 90, 70],
+    [90, 130, 170], [110, 150, 110], [170, 110, 130], [140, 140, 180],
+    [230, 150, 90], [180, 130, 110], [100, 120, 160], [120, 180, 150],
+    [210, 140, 160], [160, 100, 150], [240, 200, 120], [170, 90, 60],
+    [80, 110, 150], [130, 170, 140], [190, 120, 100], [150, 150, 190],
+    [220, 180, 140], [140, 100, 120]
+  ];
+
+  for (let i = 0; i < PLANET_COUNT; i++) {
+    const area = AREAS[i % AREAS.length];
+    const r = area.minDist + Math.random() * Math.min(600, area.maxDist - area.minDist);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+
+    planets.push({
+      x, y, z,
+      areaId: area.id,
+      radius: 22 + Math.random() * 40,
+      color: planetColors[i % planetColors.length],
+      vx: (Math.random() - 0.5) * 0.008,
+      vy: (Math.random() - 0.5) * 0.008,
+      vz: (Math.random() - 0.5) * 0.008
+    });
+  }
+
+  // ==========【新增：Area6 ~ Area10 批量生成大巨行星】==========
+  const GIANT_PLANET_COUNT = 12; // 你可以修改这个数字，增减巨行星数量
+  const giantColors = [
+    [70,130,220],   //蓝
+    [240,180,90],   //土黄
+    [210,110,80],   //橙红
+    [180,100,180],  //紫
+    [100,200,170],  //青
+    [220,140,190]   //粉
+  ];
+  for(let i=0; i<GIANT_PLANET_COUNT; i++){
+    // 锁定距离：11000 ~ 22000 (area6-area10)
+    const r = 11000 + Math.random() * (22000 - 11000);
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.acos(2 * Math.random() - 1);
+    const x = r * Math.sin(phi) * Math.cos(theta);
+    const y = r * Math.sin(phi) * Math.sin(theta);
+    const z = r * Math.cos(phi);
+
+    // 判断属于哪个area，赋值areaId
+    const areaInfo = getAreaByDist(r);
+    planets.push({
+      x, y, z,
+      areaId: areaInfo.id,
+      radius: 60 + Math.random() * 50, // 大行星半径：60 ~ 110，远大于普通行星
+      color: giantColors[i % giantColors.length],
+      vx: (Math.random() - 0.5) * 0.004, // 移动更缓慢，远距离行星不要太快
+      vy: (Math.random() - 0.5) * 0.004,
+      vz: (Math.random() - 0.5) * 0.004
+    });
+  }
+
+  // 触摸控制：缩放进入区域
+  let touching = false;
+  let lastX = 0;
+  let lastY = 0;
+  let pinchStartDist = 0;
+  let pinchStartCam = 1400;
+  const ROTATE_SENS = 0.005 * 0.4;
+
+  canvas.addEventListener("touchstart", e => {
+    touching = true;
+    if (e.touches.length === 1) {
+      lastX = e.touches[0].clientX;
+      lastY = e.touches[0].clientY;
+    } else if (e.touches.length === 2) {
+      pinchStartDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      pinchStartCam = targetCamDist;
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchmove", e => {
+    if (!touching) return;
+    e.preventDefault();
+    if (e.touches.length === 1) {
+      const x = e.touches[0].clientX;
+      const y = e.touches[0].clientY;
+      targetRotY += (x - lastX) * ROTATE_SENS;
+      targetRotX += (y - lastY) * ROTATE_SENS;
+      lastX = x;
+      lastY = y;
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const raw = pinchStartCam * (pinchStartDist / dist);
+      const delta = raw - pinchStartCam;
+      targetCamDist = pinchStartCam + delta * 0.4;
+      targetCamDist = Math.max(AREAS[0].minDist, Math.min(AREAS[AREAS.length - 1].maxDist, targetCamDist));
+    }
+  }, { passive: false });
+
+  canvas.addEventListener("touchend", () => touching = false);
+
+  function project(px, py, pz) {
+    let x = px * Math.cos(rotY) - pz * Math.sin(rotY);
+    let z = px * Math.sin(rotY) + pz * Math.cos(rotY);
+    let y = py;
+
+    let y2 = y * Math.cos(rotX) - z * Math.sin(rotX);
+    let z2 = y * Math.sin(rotX) + z * Math.cos(rotX);
+    y = y2;
+    z = z2 + camDist;
+
+    if (z <= 30) return null;
+
+    const scale = FOV / z;
+    return {
+      sx: W / 2 + x * scale,
+      sy: H / 2 + y * scale,
+      scale,
+      z
+    };
+  }
+
+  function drawPlanet(p, planet) {
+    const s = p.scale;
+    const r = planet.radius * s;
+
+    const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 2.4);
+    glow.addColorStop(0, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},0.55)`);
+    glow.addColorStop(1, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},0)`);
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r * 2.4, 0, Math.PI * 2);
+    ctx.fill();
+
+    const body = ctx.createRadialGradient(
+      p.sx - r * 0.35, p.sy - r * 0.35, r * 0.1,
+      p.sx, p.sy, r
+    );
+    body.addColorStop(0, `rgb(${Math.min(255, planet.color[0] + 40)},${Math.min(255, planet.color[1] + 40)},${Math.min(255, planet.color[2] + 40)})`);
+    body.addColorStop(1, `rgb(${planet.color[0]},${planet.color[1]},${planet.color[2]})`);
+    ctx.fillStyle = body;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // 【新增绘制大行星】
+  function drawBigPlanet(p){
+    const s = p.scale;
+    const r = bigPlanet.radius * s;
+    const glow = ctx.createRadialGradient(p.sx, p.sy,0,p.sx,p.sy,r*2.2);
+    glow.addColorStop(0,"rgba(80,130,200,0.5)");
+    glow.addColorStop(1,"rgba(80,130,200,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.sx,p.sy,r*2.2,0,Math.PI*2);
+    ctx.fill();
+
+    const bodyGrad = ctx.createRadialGradient(p.sx-r*0.3,p.sy-r*0.3, r*0.1, p.sx,p.sy,r);
+    bodyGrad.addColorStop(0,"#77aadd");
+    bodyGrad.addColorStop(1,"#335588");
+    ctx.fillStyle = bodyGrad;
+    ctx.beginPath();
+    ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+    ctx.fill();
+  }
+  //【新增绘制小行星】
+  function drawAsteroid(p,ast){
+    const s = p.scale;
+    const r = ast.r * s;
+    ctx.fillStyle=`rgb(${ast.color[0]},${ast.color[1]},${ast.color[2]})`;
+    ctx.beginPath();
+    ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+    ctx.fill();
+  }
+  //【新增绘制恒星+镜头光晕】
+  function drawSun(p){
+    const s = p.scale;
+    const r = sun.radius * s;
+    //外层大光晕
+    const flare = ctx.createRadialGradient(p.sx,p.sy,0,p.sx,p.sy,r*3.5);
+    flare.addColorStop(0,"rgba(255,255,255,1)");
+    flare.addColorStop(0.2,"rgba(255,255,200,0.6)");
+    flare.addColorStop(1,"rgba(255,255,200,0)");
+    ctx.fillStyle=flare;
+    ctx.beginPath();
+    ctx.arc(p.sx,p.sy,r*3.5,0,Math.PI*2);
+    ctx.fill();
+    //恒星本体
+    ctx.fillStyle="#ffffff";
+    ctx.beginPath();
+    ctx.arc(p.sx,p.sy,r,0,Math.PI*2);
+    ctx.fill();
+  }
+
+  function drawStar(s, time) {
+    const p = project(s.x, s.y, s.z);
+    if (!p) return;
+    s.proj = p; //保存投影坐标用于点击检测
+
+    const tw = 0.75 + 0.25 * Math.sin(time * s.twinkleSpeed + s.twinklePhase);
+    const r = Math.max(0.12, s.baseR * p.scale * 70 * tw);
+    const [cr, cg, cb] = s.color;
+
+    const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 2.2);
+    glow.addColorStop(0, `rgba(${cr},${cg},${cb},${0.18 * tw})`);
+    glow.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = glow;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r * 2.2, 0, Math.PI * 2);
+    ctx.fill();
+
+    ctx.fillStyle = `rgb(${cr},${cg},${cb})`;
+    ctx.beginPath();
+    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+    ctx.fill();
+
+    // 更新留言文字位置，跟随3D星星
+    if(s.noteDom){
+      s.noteDom.style.left = p.sx + "px";
+      s.noteDom.style.top = p.sy + "px";
+    }
+  }
+
+  function updateStar(s) {
+    s.x += s.flow.x;
+    s.y += s.flow.y;
+    s.z += s.flow.z;
+
+    const l = Math.hypot(s.x, s.y, s.z);
+    if (l > 22000) {
+      s.x *= 0.82;
+      s.y *= 0.82;
+      s.z *= 0.82;
+    }
+  }
+
+  function updatePlanet(pl) {
+    pl.x += pl.vx;
+    pl.y += pl.vy;
+    pl.z += pl.vz;
+
+    const l = Math.hypot(pl.x, pl.y, pl.z);
+    if (l > 22000) {
+      pl.x *= 0.84;
+      pl.y *= 0.84;
+      pl.z *= 0.84;
+    }
+  }
+
+  // ===== 点击拾取星星 =====
+  canvas.addEventListener('click', (e)=>{
+    // 如果弹窗打开，忽略画布点击
+    if(quoteModal.classList.contains('open') || msgBox.style.display === "block") return;
+    const mx = e.clientX;
+    const my = e.clientY;
+    // 由近到远查找星星
+    const sortedStars = [...stars].filter(s=>s.proj).sort((a,b)=>a.proj.z - b.proj.z);
+    for(const st of sortedStars){
+      const dx = mx - st.proj.sx;
+      const dy = my - st.proj.sy;
+      const dist = Math.sqrt(dx*dx + dy*dy);
+      if(dist < 12){
+        // 命中星星
+        selectedStar = st;
+        // 弹出哲理句子
+        const randomQuote = quoteList[Math.floor(Math.random() * quoteList.length)];
+        quoteCN.innerText = randomQuote.cn;
+        quoteEN.innerText = randomQuote.en;
+        quoteModal.classList.add('open');
+        return;
+      }
+    }
+  });
+
+  // 加载历史留言
+  function loadSavedMessages(){
+    const savedList = loadSavedNotes();
+    savedList.forEach(item=>{
+      const targetStar = stars.find(s=>s.id === item.starId);
+      if(targetStar){
+        const safeText = escapeHtml(item.text);
+        targetStar.noteText = safeText;
+        targetStar.noteDom = document.createElement('div');
+        targetStar.noteDom.className = 'star-note';
+        targetStar.noteDom.innerText = safeText;
+        document.body.appendChild(targetStar.noteDom);
+      }
+    })
+  }
+  loadSavedMessages();
+
+  function loop(time) {
+    ctx.fillStyle = "rgba(2,3,10,0.22)";
+    ctx.fillRect(0, 0, W, H);
+
+    camDist += (targetCamDist - camDist) * 0.08;
+    rotX += (targetRotX - rotX) * 0.08;
+    rotY += (targetRotY - rotY) * 0.08;
+
+    // 区域切换检测
+    const area = getAreaByDist(camDist);
+    if (area.id !== currentAreaId) {
+      currentAreaId = area.id;
+      showAreaToast(area);
+    }
+
+    //更新大行星自转
+    bigPlanet.rot += 0.0015;
+    //小行星整体缓慢旋转
+    asteroids.forEach(a=>{
+      const ang = 0.0008;
+      const ox=0,oz=0;
+      const nx = a.x*Math.cos(ang) - a.z*Math.sin(ang);
+      const nz = a.x*Math.sin(ang) + a.z*Math.cos(ang);
+      a.x = nx;
+      a.z = nz;
+    })
+
+    //星云缓慢漂移更新
+    for (const cloud of nebulaClouds) {
+      cloud.x += cloud.drift.x;
+      cloud.y += cloud.drift.y;
+      cloud.z += cloud.drift.z;
+      const l = Math.hypot(cloud.x, cloud.y, cloud.z);
+      if (l > 9000) {
+        cloud.x *= 0.88;
+        cloud.y *= 0.88;
+        cloud.z *= 0.88;
+      }
+    }
+
+    // ========== 绘制顺序【重点】：星云最先画（最底层背景）==========
+    for (const cloud of nebulaClouds) {
+      drawNebula(cloud);
+    }
+
+    const sunProj = project(sun.x,sun.y,sun.z);
+    if(sunProj) drawSun(sunProj);
+
+    const bpProj = project(bigPlanet.x, bigPlanet.y, bigPlanet.z);
+    if(bpProj) drawBigPlanet(bpProj);
+
+    //绘制小行星
+    for(const ast of asteroids){
+      const ap = project(ast.x,ast.y,ast.z);
+      if(ap) drawAsteroid(ap,ast);
+    }
+
+    for (const st of stars) {
+      updateStar(st);
+      drawStar(st, time);
+    }
+
+    for (const pl of planets) {
+      updatePlanet(pl);
+      const proj = project(pl.x, pl.y, pl.z);
+      if (proj) drawPlanet(proj, pl);
+    }
+
+    requestAnimationFrame(loop);
+  }
+
+  requestAnimationFrame(loop);
+})();
+</script>
+</body>
+</html>
