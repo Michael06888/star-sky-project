@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+ <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
 <meta charset="UTF-8" />
@@ -194,6 +194,27 @@
 <div class="tip">拖拽旋转宇宙 · 双指缩放切换区域 · 点击星星阅读句子</div>
 <div class="area-toast" id="areaToast"></div>
 <div class="gold-panel">💰 金币：<span id="goldText">300</span></div>
+
+<div class="modal" id="quoteModal">
+<div class="panel">
+  <div class="quote-cn" id="quoteCN"></div>
+  <div class="quote-en" id="quoteEN"></div>
+  <button class="quote-close" id="quoteCloseBtn">继续</button>
+</div>
+</div>
+
+<div class="modal" id="eventModal">
+<div class="panel">
+  <div style="color:#ffe190;font-size:20px;margin-bottom:12px;text-align:center" id="eventTitle"></div>
+  <div style="font-size:15px;line-height:1.7;margin-bottom:20px;color:#eee;white-space:pre-line" id="eventDesc"></div>
+  <div id="eventChoices"></div>
+</div>
+</div>
+
+<!-- 虚拟摇杆 -->
+<div class="joystick-wrap" id="joystickWrap">
+  <div class="joystick-knob" id="joystickKnob"></div>
+</div>
 
 <div class="modal" id="quoteModal">
 <div class="panel">
@@ -670,15 +691,15 @@ function updateCosmicEvents(dt, areaId){
 
   const AREAS = [
     { id: 1, minDist: 500*2,  maxDist: 2600*2, color: [255, 225, 140], name: "area1" },
-    { id: 2, minDist: 2600*2, maxDist: 4700*2, color: [255, 80, 80],  name: "area2" },
-    { id: 3, minDist: 4700*2, maxDist: 6800*2, color: [80, 255, 140], name: "area3" },
-    { id: 4, minDist: 6800*2, maxDist: 8900*2, color: [180, 100, 255],name: "area4" },
-    { id: 5, minDist: 8900*2, maxDist: 11000*2,color: [100, 255, 180],name: "area5" },
-    { id: 6, minDist: 11000*2,maxDist: 13100*2,color: [80, 170, 255], name: "area6" },
-    { id: 7, minDist: 13100*2,maxDist: 15200*2,color: [255, 180, 220],name: "area7" },
-    { id: 8, minDist: 15200*2,maxDist: 17300*2,color: [200, 220, 255],name: "area8" },
-    { id: 9, minDist: 17300*2,maxDist: 19400*2,color: [255, 210, 130],name: "area9" },
-    { id: 10,minDist: 19400*2,maxDist: 22000*2,color: [140, 110, 255],name: "area10"}
+    { id: 2, minDist: 2600*2, maxDist: 6800*2, color: [255, 80, 80],  name: "area2" },
+    { id: 3, minDist: 6800*2, maxDist: 9300*2, color: [80, 255, 140], name: "area3" },
+    { id: 4, minDist: 9300*2, maxDist: 14400*2, color: [180, 100, 255],name: "area4" },
+    { id: 5, minDist: 14400*2, maxDist: 19800*2,color: [100, 255, 180],name: "area5" },
+    { id: 6, minDist: 19800*2,maxDist: 25600*2,color: [80, 170, 255], name: "area6" },
+    { id: 7, minDist: 25600*2,maxDist: 33000*2,color: [255, 180, 220],name: "area7" },
+    { id: 8, minDist: 33000*2,maxDist: 43000*2,color: [200, 220, 255],name: "area8" },
+    { id: 9, minDist: 43000*2,maxDist: 56000*2,color: [255, 210, 130],name: "area9" },
+    { id: 10,minDist: 56000*2,maxDist: 80000*2,color: [140, 110, 255],name: "area10"}
   ];
 
   let currentAreaId = 1;
@@ -719,11 +740,28 @@ function updateCosmicEvents(dt, areaId){
   ];
 
   const asteroids = [];
-  const asteroidCount = 900;
+  const asteroidCount = 200000;
   for(let i=0;i<asteroidCount;i++){
-    const ringR = 700 + Math.random()*800;
+    const ringR = 22000 + Math.random()*60000;
     const ang = Math.random()*Math.PI*2;
     asteroids.push({
+      x: Math.cos(ang)*ringR,
+      y: (Math.random()-0.5)*140,
+      z: Math.sin(ang)*ringR,
+      r: 10 + Math.random()*28,
+      color:[110,110,110],
+      rotX:Math.random()*Math.PI,
+      rotY:Math.random()*Math.PI,
+      rotZ:Math.random()*Math.PI
+    })
+  }
+
+  const asteroids2 = [];
+  const asteroid2Count = 8000;
+  for(let i=0;i<asteroid2Count;i++){
+    const ringR = 1600 + Math.random()*400;
+    const ang = Math.random()*Math.PI*2;
+    asteroids2.push({
       x: Math.cos(ang)*ringR,
       y: (Math.random()-0.5)*140,
       z: Math.sin(ang)*ringR,
@@ -734,7 +772,23 @@ function updateCosmicEvents(dt, areaId){
       rotZ:Math.random()*Math.PI
     })
   }
-
+// ====== 新增第二个小行星环 ======
+const asteroidsRing2 = [];
+const asteroidsRing2Count = 2500;
+for(let i=0;i<asteroidsRing2Count;i++){
+  const ringR = 2500 + Math.random() * 1000; // 环半径：最小2500，最大3500
+  const ang = Math.random()*Math.PI*2;
+  asteroidsRing2.push({
+    x: Math.cos(ang)*ringR,
+    y: (Math.random()-0.5)*180, // y：环上下厚度
+    z: Math.sin(ang)*ringR,
+    r: 3 + Math.random()*24,    // 小行星大小
+    color: [130,120,150],      // 偏紫灰色，和第一个环区分开
+    rotX:Math.random()*Math.PI,
+    rotY:Math.random()*Math.PI,
+    rotZ:Math.random()*Math.PI
+  })
+}
   const sun = {
     x:1400*3,y:700*3,z:-1200*3,
     radius:120,
@@ -822,7 +876,77 @@ function updateCosmicEvents(dt, areaId){
       isRedGiant:false
     });
   }
+// 新增：专门生成 Area6~10 远距离星星
+const FAR_STAR_COUNT = 2000;
+for (let i = 0; i < FAR_STAR_COUNT; i++) {
+  const areaList = AREAS.filter(a => a.id >=6 && a.id <=10);
+  const area = areaList[Math.floor(Math.random() * areaList.length)];
+  const r = area.minDist + Math.random() * (area.maxDist - area.minDist);
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2 * Math.random() - 1);
+  const x = r * Math.sin(phi) * Math.cos(theta);
+  const y = r * Math.sin(phi) * Math.sin(theta);
+  const z = r * Math.cos(phi);
 
+  stars.push({
+    id: starIdCounter++,
+    x, y, z,
+    areaId: area.id,
+    baseR: 0.3 + Math.random() * 0.45 + r / 20000, //远星基础尺寸更大
+    color: area.color,
+    twinkleSpeed: 0.0004 + Math.random() * 0.001,
+    twinklePhase: Math.random() * Math.PI * 2,
+    flow: { x: 0.04, y: 0.016, z: 0.008 },
+    noteText:"",
+    noteDom:null,
+    proj:null,
+    isBlueGiant:false,
+    isSandGiant:false,
+    isRedGiant:false
+  });
+}
+// ========== 在 Area6~10 批量生成大行星 ==========
+const FAR_PLANET_COUNT = 300; // 一共生成12颗外层大行星
+for(let i=0; i<FAR_PLANET_COUNT; i++){
+  const areaList = AREAS.filter(a => a.id >=6 && a.id <=10);
+  const area = areaList[Math.floor(Math.random()*areaList.length)];
+  const r = area.minDist + Math.random()*(area.maxDist - area.minDist);
+  const theta = Math.random() * Math.PI * 2;
+  const phi = Math.acos(2*Math.random()-1);
+  const x = r * Math.sin(phi) * Math.cos(theta);
+  const y = r * Math.sin(phi) * Math.sin(theta);
+  const z = r * Math.cos(phi);
+
+  // 随机三种巨行星类型
+  let typeRand = Math.random();
+  let radius,color,isBlueGiant=false,isSandGiant=false,isRedGiant=false;
+  if(typeRand < 0.35){
+    //蓝巨星
+    radius = 160 + Math.random()*120;
+    color = [60,110,190];
+    isBlueGiant = true;
+  }else if(typeRand < 0.7){
+    //沙巨星
+    radius = 180 + Math.random()*140;
+    color = [190,150,100];
+    isSandGiant = true;
+  }else{
+    //红巨星
+    radius = 220 + Math.random()*180;
+    color = [180,70,60];
+    isRedGiant = true;
+  }
+
+  bigPlanets.push({
+    x,y,z,
+    radius,
+    color,
+    rot: Math.random()*Math.PI*2,
+    isBlueGiant,
+    isSandGiant,
+    isRedGiant
+  });
+}
   const PLANET_COUNT = 26;
   const planetColors = [
     [220, 120, 80], [80, 140, 200], [160, 90, 120], [100, 170, 130],
@@ -846,9 +970,9 @@ function updateCosmicEvents(dt, areaId){
     planets.push({
       x, y, z,
       areaId: area.id,
-      radius: 22 + Math.random() * 40,
+      radius: 180+ Math.random() * 390,
       color: planetColors[i % planetColors.length],
-      vx: (Math.random() - 0.5) * 0.008,
+      vx: (Math.random() - 50) * 0.008,
       vy: (Math.random() - 0.5) * 0.008,
       vz: (Math.random() - 0.5) * 0.008
     });
@@ -930,52 +1054,53 @@ function updateCosmicEvents(dt, areaId){
       quoteModal.classList.add("open");
     }
   }
+function project(px, py, pz) {
+  let x = px * Math.cos(rotY) - pz * Math.sin(rotY);
+  let z = px * Math.sin(rotY) + pz * Math.cos(rotY);
+  let y = py;
 
-  function project(px, py, pz) {
-    let x = px * Math.cos(rotY) - pz * Math.sin(rotY);
-    let z = px * Math.sin(rotY) + pz * Math.cos(rotY);
-    let y = py;
+  let y2 = y * Math.cos(rotX) - z * Math.sin(rotX);
+  let z2 = y * Math.sin(rotX) + z * Math.cos(rotX);
+  y = y2;
+  z = z2 + camDist;
 
-    let y2 = y * Math.cos(rotX) - z * Math.sin(rotX);
-    let z2 = y * Math.sin(rotX) + z * Math.cos(rotX);
-    y = y2;
-    z = z2 + camDist;
+  const scale = FOV / Math.max(z, 1);
+  return {
+    sx: W / 2 + x * scale,
+    sy: H / 2 + y * scale,
+    scale,
+    z
+  };
+}
+function drawPlanet(p, planet)
+{
+  const s = p.scale;
+  const r = planet.radius * s;
 
-    if (z <= 30) return null;
-
-    const scale = FOV / z;
-    return {
-      sx: W / 2 + x * scale,
-      sy: H / 2 + y * scale,
-      scale,
-      z
-    };
+  let alpha = 1;
+  if(p.z < 0){
+    alpha = Math.max(0.1, 0.3 + p.z / 8000);
   }
 
-  function drawPlanet(p, planet) {
-    const s = p.scale;
-    const r = planet.radius * s;
+  const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 2.4);
+  glow.addColorStop(0, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},${0.55*alpha})`);
+  glow.addColorStop(1, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},0)`);
+  ctx.fillStyle = glow;
+  ctx.beginPath();
+  ctx.arc(p.sx, p.sy, r * 2.4, 0, Math.PI * 2);
+  ctx.fill();
 
-    const glow = ctx.createRadialGradient(p.sx, p.sy, 0, p.sx, p.sy, r * 2.4);
-    glow.addColorStop(0, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},0.55)`);
-    glow.addColorStop(1, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},0)`);
-    ctx.fillStyle = glow;
-    ctx.beginPath();
-    ctx.arc(p.sx, p.sy, r * 2.4, 0, Math.PI * 2);
-    ctx.fill();
-
-    const body = ctx.createRadialGradient(
-      p.sx - r * 0.35, p.sy - r * 0.35, r * 0.1,
-      p.sx, p.sy, r
-    );
-    body.addColorStop(0, `rgb(${Math.min(255, planet.color[0] + 40)},${Math.min(255, planet.color[1] + 40)},${Math.min(255, planet.color[2] + 40)})`);
-    body.addColorStop(1, `rgb(${planet.color[0]},${planet.color[1]},${planet.color[2]})`);
-    ctx.fillStyle = body;
-    ctx.beginPath();
-    ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
-    ctx.fill();
-  }
-
+  const body = ctx.createRadialGradient(
+    p.sx - r * 0.35, p.sy - r * 0.35, r * 0.1,
+    p.sx, p.sy, r
+  );
+  body.addColorStop(0, `rgba(${Math.min(255, planet.color[0] + 40)},${Math.min(255, planet.color[1] + 40)},${Math.min(255, planet.color[2] + 40)},${alpha})`);
+  body.addColorStop(1, `rgba(${planet.color[0]},${planet.color[1]},${planet.color[2]},${alpha})`);
+  ctx.fillStyle = body;
+  ctx.beginPath();
+  ctx.arc(p.sx, p.sy, r, 0, Math.PI * 2);
+  ctx.fill();
+}
   function drawBigPlanet(p, planet){
     const s = p.scale;
     const r = planet.radius * s;
@@ -1076,7 +1201,7 @@ function updateCosmicEvents(dt, areaId){
     s.z += s.flow.z;
 
     const l = Math.hypot(s.x, s.y, s.z);
-    if (l > 22000) {
+    if (l > 140000) {
       s.x *= 0.82;
       s.y *= 0.82;
       s.z *= 0.82;
@@ -1089,7 +1214,7 @@ function updateCosmicEvents(dt, areaId){
     pl.z += pl.vz;
 
     const len = Math.hypot(pl.x, pl.y, pl.z);
-    if(len > 22000){
+    if(len > 140000){
       pl.x *=0.78;
       pl.y *=0.78;
       pl.z *=0.78;
